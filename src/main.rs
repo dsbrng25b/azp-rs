@@ -3,7 +3,7 @@ use std::io::BufReader;
 use std::io::prelude::*;
 use std::fs::File;
 use chrono::prelude::*;
-use std::error::Error;
+use std::error::Error as StdError;
 use std::char;
 use std::fmt;
 use anyhow::{Context, Result};
@@ -11,46 +11,36 @@ use anyhow::{Context, Result};
 const FILE_NAME: &str = "azp.txt";
 const YEAR: i32 = 2020;
 
+#[derive(Debug)]
+struct Error<'a> {
+    description: &'a str,
+}
 
-// #[derive(Debug)]
-// struct MyError<'a, E: Error> {
-//     inner: Option<&'a E>,
-//     description: String,
-// }
-// 
-// impl fmt::Display for MyError {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         write!(f, "{}: {}", self.description, self.inner)
-//     }
-// }
-// 
-// impl Error for MyError {
-//     fn source(&self) -> Option<&(dyn Error + 'static)> {
-//         self.inner
-//     }
-// }
+impl<'a> fmt::Display for Error<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "err: {}", self.description)
+    }
+}
+
+impl<'a> StdError for Error<'a> {
+}
 
 struct Workunit {
     from: DateTime<Local>,
     to: DateTime<Local>,
-    comment: String,
+    comment: Option<String>,
 }
 
 fn main() -> Result<()> {
-    let mut file = dirs::home_dir().expect("");
+    let mut file_path = dirs::home_dir().ok_or( Error { description: "dirs not found", })?;
+    file_path.push(FILE_NAME);
 
-    file.push(FILE_NAME);
-
-    println!("open {}", file.to_str().unwrap_or(""));
-
-    let file = File::open(&file).with_context(|| format!("failed to open"))?;
-
+    let file = File::open(&file_path)?;
     let file = BufReader::new(file);
 
     let mut units: Vec<Workunit> = Vec::new();
-
     for (i, line) in file.lines().enumerate() {
-        let line = line.with_context(|| format!("failed to read"))?;
+        let line = line?;
 
         // skip comments
         if line.starts_with('#') {
@@ -61,31 +51,54 @@ fn main() -> Result<()> {
             continue
         }
 
-        units.push(parse_line(&line).with_context(|| format!("failed to parse line {}", i + 1))?);
+        let work_unit = parse_line(&line)
+            .with_context(||format!("failed to parse line {} '{}'", i + 1, line))?;
+        units.push(work_unit);
     }
 
     for unit in units {
         let work_time = unit.to - unit.from;
-        println!("from: {}, to: {}, comment: {}, time: {}h{}min", unit.from, unit.to, unit.comment, work_time.num_hours(), work_time.num_minutes() % 60);
+        print!("{} - {}: {}h{}min", unit.from, unit.to, work_time.num_hours(), work_time.num_minutes() % 60);
+        if let Some(comment) = unit.comment {
+            println!(" {}", comment);
+        } else {
+            println!("");
+        }
     }
-
     Ok(())
 }
 
 fn parse_line(line: &str) -> Result<Workunit> {
-    let parts: Vec<&str> = line.splitn(4, char::is_whitespace).collect();
-    let date: Vec<&str> = parts[0].split(".").collect();
-    let from: Vec<&str> = parts[1].split(":").collect();
-    let to: Vec<&str> = parts[2].split(":").collect();
+    let mut iter = line.split_whitespace();
 
-    let date: Date<Local> = Local.ymd(YEAR, date[1].parse()?, date[0].parse()?);
+    let date = iter.next().ok_or(Error{ description: "missing date", })?;
+    let from = iter.next().ok_or(Error{ description: "missing date", })?;
+    let to = iter.next().ok_or(Error{ description: "missing date", })?;
 
-    let from =date.and_hms(from[0].parse()?, from[1].parse()?, 0);
-    let to =date.and_hms(to[0].parse()?, to[1].parse()?, 0);
+    // todo get full description/comment
+    let comment = iter.next().map(ToOwned::to_owned);
+
+    let date = parse_date(date, YEAR)?;
+    let from = parse_time(from, &date)?;
+    let to = parse_time(to, &date)?;
 
     Ok(Workunit {
-        from: from,
-        to: to,
-        comment: parts[3].to_string(),
+        from,
+        to,
+        comment,
     })
+}
+
+fn parse_date(s: &str, year: i32) -> Result<Date<Local>> {
+    let mut iter = s.splitn(2, ".");
+    let day = iter.next().ok_or(Error{ description: "missing day", })?.parse()?;
+    let month = iter.next().ok_or(Error{ description: "missing month", })?.parse()?;
+    Ok(Local.ymd(year, month, day))
+}
+
+fn parse_time(s: &str, date: &Date<Local>) -> Result<DateTime<Local>> {
+    let mut iter = s.splitn(2, ":");
+    let hour = iter.next().ok_or(Error{ description: "missing hour", })?.parse()?;
+    let minute = iter.next().ok_or(Error{ description: "missing minute", })?.parse()?;
+    Ok(date.and_hms(hour, minute, 0))
 }
