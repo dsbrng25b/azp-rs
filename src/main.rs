@@ -4,7 +4,6 @@ use std::io::prelude::*;
 use std::fs::File;
 use chrono::prelude::*;
 use std::error::Error as StdError;
-use std::char;
 use std::fmt;
 use anyhow::{Context, Result};
 
