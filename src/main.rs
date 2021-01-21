@@ -55,16 +55,32 @@ fn main() -> Result<()> {
         units.push(work_unit);
     }
 
-    for unit in units {
+    for unit in units.iter() {
         let work_time = unit.to - unit.from;
         print!("{} - {}: {}h{}min", unit.from, unit.to, work_time.num_hours(), work_time.num_minutes() % 60);
-        if let Some(comment) = unit.comment {
+        if let Some(comment) = &unit.comment {
             println!(" {}", comment);
         } else {
             println!("");
         }
     }
+
+    let total_minutes = get_total_minutes(&units);
+    println!("\nTotal working time: {}h{}min", total_minutes / 60, total_minutes % 60);
+
     Ok(())
+}
+
+fn get_total_minutes(units: &Vec<Workunit>) -> i64{
+
+    let mut total_work_minutes = 0i64;
+
+    for unit in units.iter() {
+        let worktime = unit.to - unit.from;
+        total_work_minutes += worktime.num_minutes();
+    }
+
+    total_work_minutes
 }
 
 fn parse_line(line: &str) -> Result<Workunit> {
