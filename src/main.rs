@@ -55,10 +55,10 @@ fn main() -> Result<()> {
         units.push(work_unit);
     }
 
-    for unit in units {
+    for unit in units.iter() {
         let work_time = unit.to - unit.from;
         print!("{} - {}: {}h{}min", unit.from, unit.to, work_time.num_hours(), work_time.num_minutes() % 60);
-        if let Some(comment) = unit.comment {
+        if let Some(comment) = &unit.comment {
             println!(" {}", comment);
         } else {
             println!("");
