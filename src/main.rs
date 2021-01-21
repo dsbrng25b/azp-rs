@@ -64,7 +64,23 @@ fn main() -> Result<()> {
             println!("");
         }
     }
+
+    let total_minutes = get_total_minutes(&units);
+    println!("\nTotal working time: {}h{}min", total_minutes / 60, total_minutes % 60);
+
     Ok(())
+}
+
+fn get_total_minutes(units: &Vec<Workunit>) -> i64{
+
+    let mut total_work_minutes = 0i64;
+
+    for unit in units.iter() {
+        let worktime = unit.to - unit.from;
+        total_work_minutes += worktime.num_minutes();
+    }
+
+    total_work_minutes
 }
 
 fn parse_line(line: &str) -> Result<Workunit> {
